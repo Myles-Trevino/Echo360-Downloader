@@ -1,0 +1,25 @@
+{
+	"author": {
+		"name": "Myles Trevino"
+	},
+	"name": "echo360-downloader",
+	"productName": "Echo360 Downloader",
+	"version": "2021.2.8",
+	"description": "A tool for downloading Echo360 videos.",
+	"license": "Apache-2.0",
+	"homepage": "laventh.com",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Myles-Trevino/Echo360-Downloader"
+	},
+	"private": true,
+	"main": "index.js",
+	"type": "module",
+	"dependencies": {
+		"ffmpeg-static": "^4.2.7",
+		"fluent-ffmpeg": "^2.1.2",
+		"got": "^11.8.1",
+		"m3u8-parser": "^4.5.2",
+		"tough-cookie": "^4.0.0"
+	}
+}
