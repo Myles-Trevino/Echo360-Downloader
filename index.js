@@ -11,14 +11,31 @@ import {CookieJar} from 'tough-cookie';
 import * as M3U8Parser from 'm3u8-parser';
 import FFmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
+import prompt from 'prompt';
 
 
-const url = 'https://echo360.org/media/<id>/public'; // The URL of the desired video.
+let url = ''; // The URL of the desired video.
 const outputFolder = 'Output';
 
 const ffmpeg = new FFmpeg();
 const cookieJar = new CookieJar();
 
+const promptSchema = {
+    properties: {
+      url: {
+        message: 'Please enter URL or ID of video',
+        required: true
+      },
+    }
+  };
+
+prompt.start();
+
+prompt.get(promptSchema, function (err, result) {
+	if (err) { console.log(err)}
+	url = result.url;
+	main();
+});
 
 // Extracts a substring from between the two given marker strings.
 function extract(source, startMarker, endMarker)
@@ -59,12 +76,24 @@ async function saveStream(type, playlist, m3u8Url)
 // Main.
 async function main()
 {
+
+	if (!/^http/.test(url)) {
+		url = `https://echo360.org.au/media/${url}/public`
+	}
+
+	console.log(`Attempting to download video from ${url}...`)
+
 	try
 	{
 		// Get the cookies and keys.
 		const indexResponse = await Got(url, {cookieJar});
 		const data = JSON.parse(extract(indexResponse.body,
 			`Echo["mediaPlayerApp"]("`, `");`).replace(/\\/g, ''));
+
+		const regex = /(?:<title>).+(?:<\/title>)/
+		const title = indexResponse.body.match(regex)[0].replace('<title>','').replace('</title>','');
+
+		console.log(`Found video with title ${title}...`)
 
 		// Get the M3U8.
 		const m3u8Url = data.sources.video1.source;
@@ -88,7 +117,7 @@ async function main()
 			.input(videoFilePath)
 			.input(audioFilePath)
 			.on('end', resolve)
-			.save(`${outputFolder}/Output.mp4`));
+			.save(`${outputFolder}/${title}.mp4`));
 
 		// Delete the stream files.
 		FS.unlinkSync(audioFilePath);
@@ -101,4 +130,5 @@ async function main()
 	catch(error){ console.log(error); }
 }
 
-main();
+
+
