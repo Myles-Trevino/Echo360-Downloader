@@ -90,8 +90,8 @@ async function main()
 		const data = JSON.parse(extract(indexResponse.body,
 			`Echo["mediaPlayerApp"]("`, `");`).replace(/\\/g, ''));
 
-		const regex = /(?:<title>).+(?:<\/title>)/
-		const title = indexResponse.body.match(regex)[0].replace('<title>','').replace('</title>','');
+		const regex = /(?<=<title>).+(?=<\/title>)/
+		const title = indexResponse.body.match(regex)[0].replace('.mp4', '');
 
 		console.log(`Found video with title ${title}...`)
 
