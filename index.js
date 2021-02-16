@@ -11,31 +11,13 @@ import {CookieJar} from 'tough-cookie';
 import * as M3U8Parser from 'm3u8-parser';
 import FFmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
-import prompt from 'prompt';
+import _unescape from 'lodash/unescape.js';
 
 
-let url = ''; // The URL of the desired video.
-const outputFolder = 'Output';
-
-const ffmpeg = new FFmpeg();
+const urlsFile = 'urls.txt';
+const outputFolder = 'output';
 const cookieJar = new CookieJar();
 
-const promptSchema = {
-    properties: {
-      url: {
-        message: 'Please enter URL or ID of video',
-        required: true
-      },
-    }
-  };
-
-prompt.start();
-
-prompt.get(promptSchema, function (err, result) {
-	if (err) { console.log(err)}
-	url = result.url;
-	main();
-});
 
 // Extracts a substring from between the two given marker strings.
 function extract(source, startMarker, endMarker)
@@ -73,62 +55,81 @@ async function saveStream(type, playlist, m3u8Url)
 }
 
 
+// Downloads the video at the given URL.
+async function download(url)
+{
+	// Get the cookies and video data.
+	const indexResponse = await Got(url, {cookieJar});
+	const data = JSON.parse(extract(indexResponse.body,
+		`Echo["mediaPlayerApp"]("`, `");`).replace(/\\/g, ''));
+
+	let title = _unescape(extract(indexResponse.body, '<title>', '</title>'));
+	title = title.substring(0, title.lastIndexOf('.'));
+
+	console.log(`Found video with title ${title}...`);
+
+	// Get the M3U8.
+	const m3u8Url = data.sources.video1.source;
+	const m3u8Response = await Got(m3u8Url, {cookieJar});
+
+	// Parse the M3U8.
+	const m3u8Parser = new M3U8Parser.Parser();
+	m3u8Parser.push(m3u8Response.body);
+	m3u8Parser.end();
+	const parsedM3u8 = m3u8Parser.manifest;
+
+	// Download.
+	const videoFilePath = await saveStream('video', parsedM3u8.playlists[1], m3u8Url);
+	const audioFilePath = await saveStream('audio', parsedM3u8.playlists[2], m3u8Url);
+
+	// Merge the audio and video streams.
+	console.log('Merging...');
+
+	await new Promise((resolve) => new FFmpeg()
+		.setFfmpegPath(ffmpegPath)
+		.input(videoFilePath)
+		.videoCodec('copy')
+		.input(audioFilePath)
+		.audioCodec('copy')
+		.on('end', resolve)
+		.save(`${outputFolder}/${title}.mp4`));
+
+	// Delete the stream files.
+	FS.unlinkSync(audioFilePath);
+	FS.unlinkSync(videoFilePath);
+}
+
+
 // Main.
 async function main()
 {
-
-	if (!/^http/.test(url)) {
-		url = `https://echo360.org.au/media/${url}/public`
-	}
-
-	console.log(`Attempting to download video from ${url}...`)
-
 	try
 	{
-		// Get the cookies and keys.
-		const indexResponse = await Got(url, {cookieJar});
-		const data = JSON.parse(extract(indexResponse.body,
-			`Echo["mediaPlayerApp"]("`, `");`).replace(/\\/g, ''));
+		let urls = FS.readFileSync(urlsFile, 'utf8')
+			.split(/\r?\n/).map(e => e.trim());
 
-		const regex = /(?<=<title>).+(?=<\/title>)/
-		const title = indexResponse.body.match(regex)[0].replace('.mp4', '');
+		urls = urls.filter(element =>
+			/^https:\/\/echo360.org\/media\/.*\/public$/.test(element));
 
-		console.log(`Found video with title ${title}...`)
+		if(urls.length < 1) throw new Error('No valid URLs were found in the input file. '+
+			'URLs must be in the format: https://echo360.org/media/<id>/public.');
 
-		// Get the M3U8.
-		const m3u8Url = data.sources.video1.source;
-		const m3u8Response = await Got(m3u8Url, {cookieJar});
+		let index = 1;
+		for(const url of urls)
+		{
+			console.log(`Attempting to download video `+
+			`${index} of ${urls.length} from ${url}...`);
 
-		// Parse the M3U8.
-		const m3u8Parser = new M3U8Parser.Parser();
-		m3u8Parser.push(m3u8Response.body);
-		m3u8Parser.end();
-		const parsedM3u8 = m3u8Parser.manifest;
-
-		// Download.
-		const videoFilePath = await saveStream('video', parsedM3u8.playlists[1], m3u8Url);
-		const audioFilePath = await saveStream('audio', parsedM3u8.playlists[2], m3u8Url);
-
-		// Merge the audio and video streams.
-		console.log('Merging...');
-
-		await new Promise((resolve) => ffmpeg
-			.setFfmpegPath(ffmpegPath)
-			.input(videoFilePath)
-			.input(audioFilePath)
-			.on('end', resolve)
-			.save(`${outputFolder}/${title}.mp4`));
-
-		// Delete the stream files.
-		FS.unlinkSync(audioFilePath);
-		FS.unlinkSync(videoFilePath);
+			await download(url);
+			++index;
+		}
 
 		console.log('Done.');
 	}
 
 	// Handle errors.
-	catch(error){ console.log(error); }
+	catch(error){ console.log(error.message); }
 }
 
 
-
+main();
