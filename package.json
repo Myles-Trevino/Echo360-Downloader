@@ -20,6 +20,7 @@
 		"fluent-ffmpeg": "^2.1.2",
 		"got": "^11.8.1",
 		"m3u8-parser": "^4.5.2",
+		"prompt": "^1.1.0",
 		"tough-cookie": "^4.0.0"
 	}
 }
