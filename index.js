@@ -120,15 +120,18 @@ async function download(url)
 		`Echo["mediaPlayerApp"]("`, `");`).replace(/\\/g, ''));
 
 	// Parse the title.
-	let title = Path.parse(_unescape(extract(
-		indexResponse.body, '<title>', '</title>'))).name;
+	let title = Path.parse(data.title).name;
+	console.log(`Title: ${title}`);
 
-	console.log(`Title: ${title}\n---`);
+	// Get the video URIs.
+	let videos = [];
+	data.playableAudioVideo.playableMedias.forEach((item) =>
+	{
+		if(item.trackType.includes('Audio') && item.trackType.includes('Video'))
+			videos.push(item);
+	});
 
 	// Download each video.
-	const videos = Object.values(data.sources).filter(
-		(element) => element.hasOwnProperty('source'));
-
 	let index = 1;
 	const multipleVideos = videos.length > 1;
 
@@ -136,7 +139,7 @@ async function download(url)
 	{
 		if(index > 1) console.log('---');
 		console.log(`Downloading video ${index} of ${videos.length}...`);
-		await downloadVideo(title, video.source, index, multipleVideos);
+		await downloadVideo(title, video.uri, index, multipleVideos);
 		++index;
 	}
 }
